@@ -1,5 +1,5 @@
 """
-Code from: https://github.com/eunjuyummy/autonomous-drone-flight-project/
+Modified Code from: https://github.com/eunjuyummy/autonomous-drone-flight-project/
 """
 
 import os

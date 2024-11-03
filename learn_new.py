@@ -26,7 +26,7 @@ from CircuitAviary import CircuitAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gymnasium.envs.registration import register
 
-DEFAULT_GUI = False
+DEFAULT_GUI = True
 DEFAULT_RECORD_VIDEO = False
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
