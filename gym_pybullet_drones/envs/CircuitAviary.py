@@ -1,18 +1,14 @@
-"""
-Modified Code from: https://github.com/eunjuyummy/autonomous-drone-flight-project/
-"""
-
 import os
 import numpy as np
 import pybullet as p
 import pkg_resources
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-from BaseNewRLAviary import ActionType, ObservationType, BaseNewRLAviary
+from gym_pybullet_drones.envs.BaseNewRLAviary import ActionType, ObservationType, BaseNewRLAviary
 
 
-class FlyThruGateAviary(BaseNewRLAviary):
-    """Single agent RL problem: fly through a gate."""
+class CircuitAviary(BaseNewRLAviary):
+    """Single agent RL problem: fly through gates in a circular circuit."""
     
     ################################################################################
     
@@ -28,7 +24,7 @@ class FlyThruGateAviary(BaseNewRLAviary):
                  obs: ObservationType=ObservationType.KIN,
                  act: ActionType=ActionType.RPM
                  ):
-        """Initialization of a single agent RL environment.
+        """Initialization of a circular circuit RL environment.
 
         Using the generic single agent RL superclass.
 
@@ -53,9 +49,12 @@ class FlyThruGateAviary(BaseNewRLAviary):
         obs : ObservationType, optional
             The type of observation space (kinematic information or vision)
         act : ActionType, optional
-            The type of action space (1 or 3D; RPMS, thurst and torques, or waypoint with PID control)
+            The type of action space (1 or 3D; RPMS, thrust and torques, or waypoint with PID control)
 
         """
+        self.NUM_GATES = 8  # Number of gates in the circuit
+        self.CIRCUIT_RADIUS = 2.0  # Radius of the circuit
+        self.gates_positions = []  # Will store gate positions
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
                          initial_rpys=initial_rpys,
@@ -72,57 +71,37 @@ class FlyThruGateAviary(BaseNewRLAviary):
     
     def _addObstacles(self):
         """Add obstacles to the environment.
-
-        Extends the superclass method and adds two gates and walls between them.
+        Creates a circular arrangement of gates oriented tangentially to form a circuit.
         """
         super()._addObstacles()
-        # First gate
-        p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/architrave.urdf'),
-                   [0, -1, .55],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT
-                   )
-        # Second gate
-        p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/architrave.urdf'),
-                   [0, -2, .55],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT
-                   )
         
-        # Create pillars for both gates
-        for i in range(10):
-            # First gate pillars
-            p.loadURDF("cube_small.urdf",
-                       [-.3, -1, .02+i*0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT
-                       )
-            p.loadURDF("cube_small.urdf",
-                       [.3, -1, .02+i*0.05],
-                       p.getQuaternionFromEuler([0,0,0]),
-                       physicsClientId=self.CLIENT
-                       )
-            # Second gate pillars
-            p.loadURDF("cube_small.urdf",
-                       [-.3, -2, .02+i*0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT
-                       )
-            p.loadURDF("cube_small.urdf",
-                       [.3, -2, .02+i*0.05],
-                       p.getQuaternionFromEuler([0,0,0]),
-                       physicsClientId=self.CLIENT
-                       )
+        # Calculate gate positions in a circle
+        for i in range(self.NUM_GATES):
+            angle = (2 * np.pi * i) / self.NUM_GATES
+            x = self.CIRCUIT_RADIUS * np.cos(angle)
+            y = self.CIRCUIT_RADIUS * np.sin(angle)
             
-            # Add walls between gates (using small cubes)
-            if i < 8:  # Make walls slightly shorter than gates
+            # Store gate position for reward calculation
+            self.gates_positions.append([x, y])
+            
+            # Add gate (architrave) - oriented tangentially to the circle
+            p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/architrave.urdf'),
+                      [x, y, .55],
+                      p.getQuaternionFromEuler([0, 0, angle]),
+                      physicsClientId=self.CLIENT
+                      )
+            
+            # Add pillars for each gate - perpendicular to the tangent line
+            for h in range(10):
+                # Right pillar - angle points towards the center
                 p.loadURDF("cube_small.urdf",
-                          [0.15, -1.5, .02+i*0.05],
+                          [x + 0.3*np.cos(angle), y + 0.3*np.sin(angle), .02+h*0.05],
                           p.getQuaternionFromEuler([0, 0, 0]),
                           physicsClientId=self.CLIENT
                           )
+                # Left pillar
                 p.loadURDF("cube_small.urdf",
-                          [-0.15, -1.5, .02+i*0.05],
+                          [x - 0.3*np.cos(angle), y - 0.3*np.sin(angle), .02+h*0.05],
                           p.getQuaternionFromEuler([0, 0, 0]),
                           physicsClientId=self.CLIENT
                           )
@@ -130,25 +109,32 @@ class FlyThruGateAviary(BaseNewRLAviary):
     ################################################################################
     
     def _computeReward(self):
-        """Computes the current reward value."""
+        """Computes the current reward value based on passing through gates."""
         reward = 0.0
         state = self._getDroneStateVector(0)
-        norm_ep_time = (self.step_counter/self.PYB_FREQ) / self.EPISODE_LEN_SEC
+        pos = np.array([state[0], state[1]])
         
-        # Check first gate
-        if (state[0] >= -.27) and (state[0] <= .27) and (state[1] >= -1.1) and (state[1] <= -0.9) and (state[2] <= .5):
-            reward += 10
-        # Check second gate
-        if (state[0] >= -.27) and (state[0] <= .27) and (state[1] >= -2.1) and (state[1] <= -1.9) and (state[2] <= .5):
-            reward += 10
+        # Reward for passing through each gate
+        for gate_pos in self.gates_positions:
+            gate_pos = np.array(gate_pos)
+            dist_to_gate = np.linalg.norm(pos - gate_pos)
+            
+            if dist_to_gate < 0.3 and state[2] <= 0.5:  # Within gate bounds and correct height
+                reward += 10
         
-        # Penalty for hitting walls (adjusted for closer walls)
-        if (state[1] >= -1.7) and (state[1] <= -1.3):  # Between gates
-            if (state[0] >= 0.1) or (state[0] <= -0.1):  # Near walls (adjusted from ±0.15 to ±0.1)
-                if state[2] <= 0.4:  # Below wall height
-                    reward -= 5
+        # Penalty for being far from the gates
+        closest_gate_dist = min([np.linalg.norm(pos - np.array(gate_pos)) for gate_pos in self.gates_positions])
+        reward += -5 * closest_gate_dist  # Increased penalty for larger deviations
         
-        return (-10 * np.linalg.norm(np.array([0, -2*norm_ep_time, 0.75])-state[0:3])**2) + reward
+        # Penalize large altitude deviations (e.g., 0.3m tolerance from 0.5m target height)
+        if abs(state[2] - 0.5) > 0.3:
+            reward -= 5
+        
+        # Reward for completing the full circuit
+        if self._computeTruncated():
+            reward += 100  # Bonus for completing the circuit
+        
+        return reward
 
     ################################################################################
     
@@ -169,12 +155,15 @@ class FlyThruGateAviary(BaseNewRLAviary):
     ################################################################################
     
     def _computeTruncated(self):
-        """Computes the current truncated value(s)."""
+        """Computes the current truncated value(s).
+        Episode is truncated when drone completes a full circuit.
+        """
         state = self._getDroneStateVector(0)
-        # Successfully passed both gates
-        if ((state[0] >= -.27) and (state[0] <= .27) and 
-            (state[1] >= -2.1) and (state[1] <= -1.9) and 
-            (state[2] <= .5)):
+        pos = np.array([state[0], state[1]])
+        
+        # Check if near starting position after passing through gates
+        if (np.linalg.norm(pos) < 0.3  # Near center
+            and self.step_counter > self.PYB_FREQ * 5):  # Avoid immediate termination
             return True
         return False
 
@@ -271,12 +260,12 @@ class FlyThruGateAviary(BaseNewRLAviary):
         
         """
         if not(clipped_pos_xy == np.array(state[0:2])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
+            print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
         if not(clipped_pos_z == np.array(state[2])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
+            print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped z position [{:.2f}]".format(state[2]))
         if not(clipped_rp == np.array(state[7:9])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
+            print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped roll/pitch [{:.2f} {:.2f}]".format(state[7], state[8]))
         if not(clipped_vel_xy == np.array(state[10:12])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
+            print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped xy velocity [{:.2f} {:.2f}]".format(state[10], state[11]))
         if not(clipped_vel_z == np.array(state[12])).all():
-            print("[WARNING] it", self.step_counter, "in FlyThruGateAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))
+            print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped z velocity [{:.2f}]".format(state[12]))

@@ -19,7 +19,7 @@ class BaseAviary(gym.Env):
     """Base class for "drone aviary" Gym environments."""
 
     # metadata = {'render.modes': ['human']}
-    
+
     ################################################################################
 
     def __init__(self,
@@ -214,7 +214,7 @@ class BaseAviary(gym.Env):
         self._updateAndStoreKinematicInformation()
         #### Start video recording #################################
         self._startVideoRecording()
-    
+
     ################################################################################
 
     def reset(self,
@@ -253,7 +253,7 @@ class BaseAviary(gym.Env):
         initial_obs = self._computeObs()
         initial_info = self._computeInfo()
         return initial_obs, initial_info
-    
+
     ################################################################################
 
     def step(self,
@@ -381,9 +381,9 @@ class BaseAviary(gym.Env):
         #### Advance the step counter ##############################
         self.step_counter = self.step_counter + (1 * self.PYB_STEPS_PER_CTRL)
         return obs, reward, terminated, truncated, info
-    
+
     ################################################################################
-    
+
     def render(self,
                mode='human',
                close=False
@@ -410,7 +410,7 @@ class BaseAviary(gym.Env):
                   "——— velocity {:+06.2f}, {:+06.2f}, {:+06.2f}".format(self.vel[i, 0], self.vel[i, 1], self.vel[i, 2]),
                   "——— roll {:+06.2f}, pitch {:+06.2f}, yaw {:+06.2f}".format(self.rpy[i, 0]*self.RAD2DEG, self.rpy[i, 1]*self.RAD2DEG, self.rpy[i, 2]*self.RAD2DEG),
                   "——— angular velocity {:+06.4f}, {:+06.4f}, {:+06.4f} ——— ".format(self.ang_v[i, 0], self.ang_v[i, 1], self.ang_v[i, 2]))
-    
+
     ################################################################################
 
     def close(self):
@@ -419,7 +419,7 @@ class BaseAviary(gym.Env):
         if self.RECORD and self.GUI:
             p.stopStateLogging(self.VIDEO_ID, physicsClientId=self.CLIENT)
         p.disconnect(physicsClientId=self.CLIENT)
-    
+
     ################################################################################
 
     def getPyBulletClient(self):
@@ -432,7 +432,7 @@ class BaseAviary(gym.Env):
 
         """
         return self.CLIENT
-    
+
     ################################################################################
 
     def getDroneIds(self):
@@ -445,7 +445,7 @@ class BaseAviary(gym.Env):
 
         """
         return self.DRONE_IDS
-    
+
     ################################################################################
 
     def _housekeeping(self):
@@ -503,7 +503,7 @@ class BaseAviary(gym.Env):
             # p.setCollisionFilterPair(bodyUniqueIdA=self.PLANE_ID, bodyUniqueIdB=self.DRONE_IDS[i], linkIndexA=-1, linkIndexB=-1, enableCollision=0, physicsClientId=self.CLIENT)
         if self.OBSTACLES:
             self._addObstacles()
-    
+
     ################################################################################
 
     def _updateAndStoreKinematicInformation(self):
@@ -517,7 +517,7 @@ class BaseAviary(gym.Env):
             self.pos[i], self.quat[i] = p.getBasePositionAndOrientation(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
             self.rpy[i] = p.getEulerFromQuaternion(self.quat[i])
             self.vel[i], self.ang_v[i] = p.getBaseVelocity(self.DRONE_IDS[i], physicsClientId=self.CLIENT)
-    
+
     ################################################################################
 
     def _startVideoRecording(self):
@@ -527,15 +527,17 @@ class BaseAviary(gym.Env):
 
         """
         if self.RECORD and self.GUI:
+            VIDEO_FOLDER = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+            os.makedirs(os.path.dirname(VIDEO_FOLDER), exist_ok=True)
             self.VIDEO_ID = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
-                                                fileName=os.path.join(self.OUTPUT_FOLDER, "video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4"),
+                                                fileName=os.path.join(VIDEO_FOLDER, "output.mp4"),
                                                 physicsClientId=self.CLIENT
                                                 )
         if self.RECORD and not self.GUI:
             self.FRAME_NUM = 0
             self.IMG_PATH = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"), '')
             os.makedirs(os.path.dirname(self.IMG_PATH), exist_ok=True)
-    
+
     ################################################################################
 
     def _getDroneStateVector(self,
@@ -550,7 +552,7 @@ class BaseAviary(gym.Env):
 
         Returns
         -------
-        ndarray 
+        ndarray
             (20,)-shaped array of floats containing the state vector of the n-th drone.
             Check the only line in this method and `_updateAndStoreKinematicInformation()`
             to understand its format.
@@ -578,7 +580,7 @@ class BaseAviary(gym.Env):
 
         Returns
         -------
-        ndarray 
+        ndarray
             (h, w, 4)-shaped array of uint8's containing the RBG(A) image captured from the n-th drone's POV.
         ndarray
             (h, w)-shaped array of uint8's containing the depth image captured from the n-th drone's POV.
@@ -663,7 +665,7 @@ class BaseAviary(gym.Env):
         Returns
         -------
         ndarray
-            (NUM_DRONES, NUM_DRONES)-shaped array of 0's and 1's representing the adjacency matrix 
+            (NUM_DRONES, NUM_DRONES)-shaped array of 0's and 1's representing the adjacency matrix
             of the system: adj_mat[i,j] == 1 if (i, j) are neighbors; == 0 otherwise.
 
         """
@@ -673,9 +675,9 @@ class BaseAviary(gym.Env):
                 if np.linalg.norm(self.pos[i, :]-self.pos[j+i+1, :]) < self.NEIGHBOURHOOD_RADIUS:
                     adjacency_mat[i, j+i+1] = adjacency_mat[j+i+1, i] = 1
         return adjacency_mat
-    
+
     ################################################################################
-    
+
     def _physics(self,
                  rpm,
                  nth_drone
@@ -748,7 +750,7 @@ class BaseAviary(gym.Env):
                                      flags=p.LINK_FRAME,
                                      physicsClientId=self.CLIENT
                                      )
-    
+
     ################################################################################
 
     def _drag(self,
@@ -771,7 +773,7 @@ class BaseAviary(gym.Env):
         base_rot = np.array(p.getMatrixFromQuaternion(self.quat[nth_drone, :])).reshape(3, 3)
         #### Simple draft model applied to the base/center of mass #
         drag_factors = -1 * self.DRAG_COEFF * np.sum(np.array(2*np.pi*rpm/60))
-        drag = np.dot(base_rot.T, drag_factors*np.array(self.vel[nth_drone, :]))
+        drag = np.dot(base_rot, drag_factors*np.array(self.vel[nth_drone, :]))
         p.applyExternalForce(self.DRONE_IDS[nth_drone],
                              4,
                              forceObj=drag,
@@ -779,7 +781,7 @@ class BaseAviary(gym.Env):
                              flags=p.LINK_FRAME,
                              physicsClientId=self.CLIENT
                              )
-    
+
     ################################################################################
 
     def _downwash(self,
@@ -857,7 +859,7 @@ class BaseAviary(gym.Env):
         vel = vel + self.PYB_TIMESTEP * no_pybullet_dyn_accs
         rpy_rates = rpy_rates + self.PYB_TIMESTEP * rpy_rates_deriv
         pos = pos + self.PYB_TIMESTEP * vel
-        quat = self._integrateQ(quat, rpy_rates, self.PYB_TIMESTEP)
+        quat = self._integrateQ(quat, rpy_rates, self.TIMESTEP)
         #### Set PyBullet's state ##################################
         p.resetBasePositionAndOrientation(self.DRONE_IDS[nth_drone],
                                           pos,
@@ -909,7 +911,7 @@ class BaseAviary(gym.Env):
         if np.any(np.abs(action) > 1):
             print("\n[ERROR] it", self.step_counter, "in BaseAviary._normalizedActionToRPM(), out-of-bound action")
         return np.where(action <= 0, (action+1)*self.HOVER_RPM, self.HOVER_RPM + (self.MAX_RPM - self.HOVER_RPM)*action) # Non-linear mapping: -1 -> 0, 0 -> HOVER_RPM, 1 -> MAX_RPM`
-    
+
     ################################################################################
 
     def _showDroneLocalAxes(self,
@@ -949,7 +951,7 @@ class BaseAviary(gym.Env):
                                                       replaceItemUniqueId=int(self.Z_AX[nth_drone]),
                                                       physicsClientId=self.CLIENT
                                                       )
-    
+
     ################################################################################
 
     def _addObstacles(self):
@@ -976,9 +978,9 @@ class BaseAviary(gym.Env):
                    p.getQuaternionFromEuler([0,0,0]),
                    physicsClientId=self.CLIENT
                    )
-    
+
     ################################################################################
-    
+
     def _parseURDFParameters(self):
         """Loads parameters from an URDF file.
 
@@ -1012,9 +1014,9 @@ class BaseAviary(gym.Env):
         DW_COEFF_3 = float(URDF_TREE[0].attrib['dw_coeff_3'])
         return M, L, THRUST2WEIGHT_RATIO, J, J_INV, KF, KM, COLLISION_H, COLLISION_R, COLLISION_Z_OFFSET, MAX_SPEED_KMH, \
                GND_EFF_COEFF, PROP_RADIUS, DRAG_COEFF, DW_COEFF_1, DW_COEFF_2, DW_COEFF_3
-    
+
     ################################################################################
-    
+
     def _actionSpace(self):
         """Returns the action space of the environment.
 
@@ -1022,7 +1024,7 @@ class BaseAviary(gym.Env):
 
         """
         raise NotImplementedError
-    
+
     ################################################################################
 
     def _observationSpace(self):
@@ -1032,9 +1034,9 @@ class BaseAviary(gym.Env):
 
         """
         raise NotImplementedError
-    
+
     ################################################################################
-    
+
     def _computeObs(self):
         """Returns the current observation of the environment.
 
@@ -1042,7 +1044,7 @@ class BaseAviary(gym.Env):
 
         """
         raise NotImplementedError
-    
+
     ################################################################################
 
     def _preprocessAction(self,
@@ -1079,7 +1081,7 @@ class BaseAviary(gym.Env):
 
         """
         raise NotImplementedError
-    
+
     ################################################################################
 
     def _computeTruncated(self):
@@ -1116,13 +1118,13 @@ class BaseAviary(gym.Env):
         current_position : ndarray
             drone's current position from state vector
         destination : ndarray
-            drone's target position 
+            drone's target position
         step_size: int
             distance next waypoint is from current position, default 1
 
         Returns
         ----------
-        next_pos: int 
+        next_pos: int
             intermediate waypoint for drone
 
         """

@@ -11,7 +11,7 @@ In a terminal, run as:
 
 Notes
 -----
-The drones move, at different altitudes, along cicular trajectories 
+The drones move, at different altitudes, along cicular trajectories
 in the X-Y plane, around point (0, -.3).
 
 """
@@ -136,13 +136,14 @@ def run(
 
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
+        print(obs[0])
 
         #### Compute control for the current way point #############
         for j in range(num_drones):
             action[j, :], _, _ = ctrl[j].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                     state=obs[j],
                                                                     target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
-                                                                    # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
+                                                                    #target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                     target_rpy=INIT_RPYS[j, :]
                                                                     )
 

@@ -15,6 +15,10 @@ reinforcement learning libraries `stable-baselines3`.
 
 """
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import time
 import argparse
 import gymnasium as gym
@@ -26,7 +30,7 @@ from CircuitAviary import CircuitAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gymnasium.envs.registration import register
 
-DEFAULT_GUI = True
+DEFAULT_GUI = False
 DEFAULT_RECORD_VIDEO = False
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False

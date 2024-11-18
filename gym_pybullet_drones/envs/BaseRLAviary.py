@@ -10,7 +10,7 @@ from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 
 class BaseRLAviary(BaseAviary):
     """Base single and multi-agent environment class for reinforcement learning."""
-    
+
     ################################################################################
 
     def __init__(self,
@@ -30,8 +30,8 @@ class BaseRLAviary(BaseAviary):
         """Initialization of a generic single and multi-agent RL environment.
 
         Attributes `vision_attributes` and `dynamics_attributes` are selected
-        based on the choice of `obs` and `act`; `obstacles` is set to True 
-        and overridden with landmarks for vision applications; 
+        based on the choice of `obs` and `act`; `obstacles` is set to True
+        and overridden with landmarks for vision applications;
         `user_debug_gui` is set to False for performance.
 
         Parameters
@@ -85,7 +85,7 @@ class BaseRLAviary(BaseAviary):
                          pyb_freq=pyb_freq,
                          ctrl_freq=ctrl_freq,
                          gui=gui,
-                         record=record, 
+                         record=record,
                          obstacles=True, # Add obstacles for RGB observations and/or FlyThruGate
                          user_debug_gui=False, # Remove of RPM sliders from all single agent learning aviaries
                          vision_attributes=vision_attributes,
@@ -168,8 +168,8 @@ class BaseRLAviary(BaseAviary):
         target position to reach using PID control.
 
         Parameter `action` is processed differenly for each of the different
-        action types: `action` can be of length 1, 3, or 4 and represent 
-        RPMs, desired thrust and torques, the next target position to reach 
+        action types: `action` can be of length 1, 3, or 4 and represent
+        RPMs, desired thrust and torques, the next target position to reach
         using PID control, a desired velocity vector, etc.
 
         Parameters
@@ -187,9 +187,15 @@ class BaseRLAviary(BaseAviary):
         self.action_buffer.append(action)
         rpm = np.zeros((self.NUM_DRONES,4))
         for k in range(action.shape[0]):
+
             target = action[k, :]
             if self.ACT_TYPE == ActionType.RPM:
+                #print(self.HOVER_RPM)
+                #print(target)
                 rpm[k,:] = np.array(self.HOVER_RPM * (1+0.05*target))
+
+                #rpm = np.array(target)
+
             elif self.ACT_TYPE == ActionType.PID:
                 state = self._getDroneStateVector(k)
                 next_pos = self._calculateNextStep(
@@ -278,7 +284,7 @@ class BaseRLAviary(BaseAviary):
             ############################################################
         else:
             print("[ERROR] in BaseRLAviary._observationSpace()")
-    
+
     ################################################################################
 
     def _computeObs(self):
@@ -308,14 +314,22 @@ class BaseRLAviary(BaseAviary):
             ############################################################
             #### OBS SPACE OF SIZE 12
             obs_12 = np.zeros((self.NUM_DRONES,12))
+            obs_18 = np.zeros((self.NUM_DRONES,18))
             for i in range(self.NUM_DRONES):
                 #obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
                 obs = self._getDroneStateVector(i)
+                rot_matrix = np.array(p.getMatrixFromQuaternion(obs[3:7]))
+                #print(rot_matrix)
                 obs_12[i, :] = np.hstack([obs[0:3], obs[7:10], obs[10:13], obs[13:16]]).reshape(12,)
+                #obs_18[i, :] = np.hstack([obs[0:3], obs[10:13], obs[13:16], rot_matrix]).reshape(18,)
             ret = np.array([obs_12[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
+            #ret = np.array([obs_18[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
             #### Add action buffer to observation #######################
-            for i in range(self.ACTION_BUFFER_SIZE):
-                ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
+            # print(ret.shape)
+            # for i in range(self.ACTION_BUFFER_SIZE):
+            #     ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
+            # print(ret.shape)
+
             return ret
             ############################################################
         else:
