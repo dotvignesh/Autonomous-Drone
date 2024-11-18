@@ -17,4 +17,4 @@ python eval_ppo.py
 - **Gymnasium**
 - **Stable-Baselines3**
 - **PyBullet**
-- **torch-directml** (for AMD GPU support) if you have nvadia, you can just use torch directly 
+- **torch-directml** (for AMD GPU support) if you have nvidia, you can just use torch directly 
