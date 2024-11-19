@@ -195,7 +195,7 @@ class BetaAviary(BaseAviary):
         Returns
         -------
         spaces.Box
-            An ndarray of shape (NUM_DRONES, 4) for the commanded CTBR to Betaflight SITL.
+            An ndarray of shape (NUM_DRONES, 4) for the commanded RPMs.
 
         """
         #### Action vector ######## P0            P1            P2            P3

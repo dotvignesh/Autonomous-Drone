@@ -7,7 +7,7 @@ class HoverAviary(BaseRLAviary):
     """Single agent RL problem: hover at position."""
 
     ################################################################################
-    
+
     def __init__(self,
                  drone_model: DroneModel=DroneModel.CF2X,
                  initial_xyzs=None,
@@ -64,7 +64,7 @@ class HoverAviary(BaseRLAviary):
                          )
 
     ################################################################################
-    
+
     def _computeReward(self):
         """Computes the current reward value.
 
@@ -75,11 +75,21 @@ class HoverAviary(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        ret = max(0, 2 - np.linalg.norm(self.TARGET_POS-state[0:3])**4)
+        #ret = max(0, 2 - np.linalg.norm(self.TARGET_POS-state[0:3])**4) # original
+        # if np.linalg.norm(self.TARGET_POS-state[0:3]) < 0.001:
+        #     ret = 1000
+        # else:
+        #     ret = - np.linalg.norm(self.TARGET_POS-state[0:3])
+        rpy = state[7:10]
+        ang_vel=state[13:16]
+
+        #ret = max(0, 1 - np.linalg.norm(self.TARGET_POS-state[0:3])) # reward for hovering at (0, 0, 1)
+        #ret = max(0, np.sqrt(2) - np.linalg.norm(self.TARGET_POS-state[0:3])) # reward for hovering at (0, 1, 1)
+        ret = max(0, 1 - np.linalg.norm(self.TARGET_POS-state[0:3])) - 0.001*np.linalg.norm(rpy) - 0.001* np.linalg.norm(ang_vel)
         return ret
 
     ################################################################################
-    
+
     def _computeTerminated(self):
         """Computes the current done value.
 
@@ -90,13 +100,14 @@ class HoverAviary(BaseRLAviary):
 
         """
         state = self._getDroneStateVector(0)
-        if np.linalg.norm(self.TARGET_POS-state[0:3]) < .0001:
+        #print(np.linalg.norm(self.TARGET_POS-state[0:3]))
+        if np.linalg.norm(self.TARGET_POS-state[0:3]) < .001:
             return True
         else:
             return False
-        
+
     ################################################################################
-    
+
     def _computeTruncated(self):
         """Computes the current truncated value.
 
@@ -117,7 +128,7 @@ class HoverAviary(BaseRLAviary):
             return False
 
     ################################################################################
-    
+
     def _computeInfo(self):
         """Computes the current info dict(s).
 
