@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torch.distributions import MultivariateNormal
@@ -56,7 +57,7 @@ class ActorCritic(nn.Module):
     """Combined actor-critic network"""
     def __init__(self, state_dim, action_dim, action_std_init):
         super().__init__()
-        self.device = torch.device('cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_dim = action_dim
         self.action_var = torch.full((action_dim,), action_std_init * action_std_init).to(self.device)
         
@@ -102,7 +103,7 @@ class PPO:
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
         self.action_std = action_std_init
-        self.device = torch.device('cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.buffer = RolloutBuffer()
         self.policy = ActorCritic(state_dim, action_dim, action_std_init).to(self.device)
