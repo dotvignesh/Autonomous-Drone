@@ -6,11 +6,8 @@ import pkg_resources
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
 from gym_pybullet_drones.envs.BaseNewRLAviary import ActionType, ObservationType, BaseNewRLAviary
 
-
 class CircuitAviary(BaseNewRLAviary):
     """Single agent RL problem: fly through gates in a circular circuit."""
-    
-    ################################################################################
     
     def __init__(self,
                  drone_model: DroneModel=DroneModel.CF2X,
@@ -19,42 +16,16 @@ class CircuitAviary(BaseNewRLAviary):
                  physics: Physics=Physics.PYB,
                  pyb_freq: int = 240,
                  ctrl_freq: int = 240,
-                 gui=True,
-                 record=True,
+                 gui=False,
+                 record=False,
                  obs: ObservationType=ObservationType.KIN,
                  act: ActionType=ActionType.RPM
                  ):
-        """Initialization of a circular circuit RL environment.
-
-        Using the generic single agent RL superclass.
-
-        Parameters
-        ----------
-        drone_model : DroneModel, optional
-            The desired drone type (detailed in an .urdf file in folder `assets`).
-        initial_xyzs: ndarray | None, optional
-            (NUM_DRONES, 3)-shaped array containing the initial XYZ position of the drones.
-        initial_rpys: ndarray | None, optional
-            (NUM_DRONES, 3)-shaped array containing the initial orientations of the drones (in radians).
-        physics : Physics, optional
-            The desired implementation of PyBullet physics/custom dynamics.
-        pyb_freq : int, optional
-            The frequency at which PyBullet steps (a multiple of ctrl_freq).
-        ctrl_freq : int, optional
-            The frequency at which the environment steps.
-        gui : bool, optional
-            Whether to use PyBullet's GUI.
-        record : bool, optional
-            Whether to save a video of the simulation in folder `files/videos/`.
-        obs : ObservationType, optional
-            The type of observation space (kinematic information or vision)
-        act : ActionType, optional
-            The type of action space (1 or 3D; RPMS, thrust and torques, or waypoint with PID control)
-
-        """
+        """Initialization of a circular circuit RL environment."""
         self.NUM_GATES = 8  # Number of gates in the circuit
         self.CIRCUIT_RADIUS = 2.0  # Radius of the circuit
         self.gates_positions = []  # Will store gate positions
+        self.gates_passed = set()  # Track unique gates passed
         super().__init__(drone_model=drone_model,
                          initial_xyzs=initial_xyzs,
                          initial_rpys=initial_rpys,
@@ -67,12 +38,8 @@ class CircuitAviary(BaseNewRLAviary):
                          act=act
                          )
 
-    ################################################################################
-    
     def _addObstacles(self):
-        """Add obstacles to the environment.
-        Creates a circular arrangement of gates oriented tangentially to form a circuit.
-        """
+        """Add obstacles to the environment."""
         super()._addObstacles()
         
         # Calculate gate positions in a circle
@@ -81,19 +48,18 @@ class CircuitAviary(BaseNewRLAviary):
             x = self.CIRCUIT_RADIUS * np.cos(angle)
             y = self.CIRCUIT_RADIUS * np.sin(angle)
             
-            # Store gate position for reward calculation
             self.gates_positions.append([x, y])
             
-            # Add gate (architrave) - oriented tangentially to the circle
+            # Add gate (architrave)
             p.loadURDF(pkg_resources.resource_filename('gym_pybullet_drones', 'assets/architrave.urdf'),
                       [x, y, .55],
                       p.getQuaternionFromEuler([0, 0, angle]),
                       physicsClientId=self.CLIENT
                       )
             
-            # Add pillars for each gate - perpendicular to the tangent line
+            # Add pillars for each gate
             for h in range(10):
-                # Right pillar - angle points towards the center
+                # Right pillar
                 p.loadURDF("cube_small.urdf",
                           [x + 0.3*np.cos(angle), y + 0.3*np.sin(angle), .02+h*0.05],
                           p.getQuaternionFromEuler([0, 0, 0]),
@@ -106,58 +72,57 @@ class CircuitAviary(BaseNewRLAviary):
                           physicsClientId=self.CLIENT
                           )
 
-    ################################################################################
-    
     def _computeReward(self):
-        """Computes the current reward value based on passing through gates."""
+        """Computes the current reward value."""
         reward = 0.0
         state = self._getDroneStateVector(0)
         pos = np.array([state[0], state[1]])
         
-        # Reward for passing through each gate
-        for gate_pos in self.gates_positions:
+        # Calculate current position relative to circle center
+        current_radius = np.sqrt(pos[0]**2 + pos[1]**2)
+        current_angle = np.arctan2(pos[1], pos[0])
+        if current_angle < 0:
+            current_angle += 2 * np.pi
+            
+        # Reward for staying close to ideal circular path
+        if abs(current_radius - self.CIRCUIT_RADIUS) < 0.5:
+            reward += 1.0
+            
+        # Reward for moving in circular direction
+        velocity = np.array([state[10], state[11]])
+        expected_velocity = np.array([-np.sin(current_angle), np.cos(current_angle)])
+        velocity_alignment = np.dot(velocity, expected_velocity)
+        if velocity_alignment > 0:
+            reward += 1.0 * velocity_alignment
+        
+        # Main reward for passing through gates
+        for i, gate_pos in enumerate(self.gates_positions):
             gate_pos = np.array(gate_pos)
             dist_to_gate = np.linalg.norm(pos - gate_pos)
             
             if dist_to_gate < 0.3 and state[2] <= 0.5:  # Within gate bounds and correct height
-                reward += 10
+                if i not in self.gates_passed:
+                    self.gates_passed.add(i)
+                    reward += 10
         
-        # Penalty for being far from the gates
-        closest_gate_dist = min([np.linalg.norm(pos - np.array(gate_pos)) for gate_pos in self.gates_positions])
-        reward += -5 * closest_gate_dist  # Increased penalty for larger deviations
-        
-        # Penalize large altitude deviations (e.g., 0.3m tolerance from 0.5m target height)
-        if abs(state[2] - 0.5) > 0.3:
-            reward -= 5
-        
-        # Reward for completing the full circuit
+        # Height maintenance reward
+        if abs(state[2] - 0.5) < 0.3:
+            reward += 1.0
+            
+        # Bonus for completing the circuit
         if self._computeTruncated():
-            reward += 100  # Bonus for completing the circuit
-        
+            reward += 100
+            
         return reward
 
-    ################################################################################
-    
     def _computeTerminated(self):
-        """Computes the current done value.
-
-        Returns
-        -------
-        bool
-            Whether the current episode is done.
-
-        """
+        """Computes the current done value."""
         if self.step_counter/self.PYB_FREQ > self.EPISODE_LEN_SEC:
             return True
-        else:
-            return False
-        
-    ################################################################################
+        return False
     
     def _computeTruncated(self):
-        """Computes the current truncated value(s).
-        Episode is truncated when drone completes a full circuit.
-        """
+        """Computes the current truncated value."""
         state = self._getDroneStateVector(0)
         pos = np.array([state[0], state[1]])
         
@@ -167,39 +132,19 @@ class CircuitAviary(BaseNewRLAviary):
             return True
         return False
 
-    ################################################################################
-    
     def _computeInfo(self):
-        """Computes the current info dict(s).
+        """Computes the current info dict(s)."""
+        return {"answer": 42}
 
-        Unused.
-
-        Returns
-        -------
-        dict[str, int]
-            Dummy value.
-
-        """
-        return {"answer": 42} #### Calculated by the Deep Thought supercomputer in 7.5M years
-
-    ################################################################################
-    
+    def reset(self, seed=None, options=None):
+        """Reset the environment and clear passed gates tracking."""
+        self.gates_passed.clear()
+        return super().reset(seed=seed, options=options)
+        
     def _clipAndNormalizeState(self,
                                state
                                ):
-        """Normalizes a drone's state to the [-1,1] range.
-
-        Parameters
-        ----------
-        state : ndarray
-            (20,)-shaped array of floats containing the non-normalized state of a single drone.
-
-        Returns
-        -------
-        ndarray
-            (20,)-shaped array of floats containing the normalized state of a single drone.
-
-        """
+        """Normalizes a drone's state to the [-1,1] range."""
         MAX_LIN_VEL_XY = 3 
         MAX_LIN_VEL_Z = 1
 
@@ -244,8 +189,6 @@ class CircuitAviary(BaseNewRLAviary):
 
         return norm_and_clipped
     
-    ################################################################################
-    
     def _clipAndNormalizeStateWarning(self,
                                       state,
                                       clipped_pos_xy,
@@ -254,11 +197,7 @@ class CircuitAviary(BaseNewRLAviary):
                                       clipped_vel_xy,
                                       clipped_vel_z,
                                       ):
-        """Debugging printouts associated to `_clipAndNormalizeState`.
-
-        Print a warning if values in a state vector is out of the clipping range.
-        
-        """
+        """Debugging printouts associated to `_clipAndNormalizeState`."""
         if not(clipped_pos_xy == np.array(state[0:2])).all():
             print("[WARNING] it", self.step_counter, "in CircuitAviary._clipAndNormalizeState(), clipped xy position [{:.2f} {:.2f}]".format(state[0], state[1]))
         if not(clipped_pos_z == np.array(state[2])).all():
