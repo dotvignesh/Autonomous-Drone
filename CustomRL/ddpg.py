@@ -86,7 +86,7 @@ class OUNoise(object):
     def sample(self):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) * self.dt+ self.sigma * np.sqrt(self.dt) * np.random.normal(scale=2,size=self.mu.shape)
+        dx = self.theta * (self.mu - x) * self.dt+ self.sigma * np.sqrt(self.dt) * np.random.normal(scale=0.5,size=self.mu.shape)
         self.state = x + dx
         return self.state
     
@@ -134,7 +134,7 @@ class CriticNetwork(nn.Module):
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_critic)
 
         ##### Device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def forward(self, state, action):
         
@@ -204,7 +204,7 @@ class ActorNetwork(nn.Module):
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_actor)
 
         ##### Device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def forward(self, state):
         # First Layer
@@ -269,6 +269,7 @@ class DDPG:
         return action
     
     def learn(self):
+        
         # only learn if we have enough experience
         if self.experience_replay_buffer.current_memory < self.batch_size:
             return

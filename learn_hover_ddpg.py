@@ -51,10 +51,10 @@ class DroneTrainer:
 
     def initialize_environment(self):
         self.env = HoverAviary(obs=self.obs_type, act=self.act_type)
-        # self.episode_length = self.env.EPISODE_LEN_SEC * self.env.CTRL_FREQ
-        # self.update_timestep = self.episode_length * 4
-        # self.log_freq = self.episode_length * 2
-        # self.print_freq = self.episode_length * 10
+        self.episode_length = self.env.EPISODE_LEN_SEC * self.env.CTRL_FREQ
+        self.update_timestep = self.episode_length * 4
+        self.log_freq = self.episode_length * 2
+        self.print_freq = self.episode_length * 10
 
     def initialize_agent(self):
         self.agent = DDPG(
@@ -85,25 +85,34 @@ class DroneTrainer:
 
         print(f"Logging initialized for run: {self.run_id}")
         print(f"Logging at: {self.log_file_path}")
+    
+    def handle_timestep_updates(self):
+        self.time_step += 1
 
-    def run_episode(self):
-        obs, info = self.env.reset(seed=42, options={})
-        current_ep_reward = 0
+        if self.time_step % self.log_freq == 0:
+            avg_reward = round(self.log_running_reward / self.log_running_episodes, 4)
+            self.log_file.write(f"{self.i_episode},{self.time_step},{avg_reward}\n")
+            self.log_file.flush()
+            self.log_running_reward = 0
+            self.log_running_episodes = 0
 
-        for _ in range(self.episode_length):
-            action = self.agent.select_action(obs)
-            obs, reward, terminated, truncated, info = self.env.step(action[np.newaxis])
-            done = terminated or truncated
+        if self.time_step % self.print_freq == 0:
+            avg_reward = round(self.print_running_reward / self.print_running_episodes, 2)
+            print(
+                f"Episode: {self.i_episode} \t Timestep: {self.time_step} \t Average Reward: {avg_reward}"
+            )
 
-            self.agent.buffer.rewards.append(reward)
-            self.agent.buffer.is_terminals.append(done)
+            if avg_reward > self.best_reward:
+                self.best_reward = avg_reward
+                best_model_path = os.path.join(self.checkpoint_base, "best_hover_ddpg.pth")
+                print(f"New best model found! Saving as: {best_model_path}")
+                self.agent.save(best_model_path)
 
-            current_ep_reward += reward
-            self.handle_timestep_updates()
+            self.print_running_reward = 0
+            self.print_running_episodes = 0
 
-            if done:
-                break
-        return current_ep_reward
+        if self.time_step % self.save_model_freq == 0:
+            self.save_model()
 
     def save_model(self):
         checkpoint_path = os.path.join(
@@ -112,35 +121,44 @@ class DroneTrainer:
         print(f"Saving model at: {checkpoint_path}")
         self.agent.save(checkpoint_path)
 
+    def run_episode(self):
+        obs, info = self.env.reset(seed=42, options={})
+        current_ep_reward = 0
+
+        for _ in range(self.episode_length):
+            action = self.agent.select_action(obs)
+            corrected_dim_act = np.copy(action).reshape(1, -1)
+            new_state, reward, terminated, truncated, info = self.env.step(corrected_dim_act)
+            done = terminated or truncated
+
+            self.agent.remember_transition(obs, action, reward, new_state, int(done))
+            self.agent.learn()
+            current_ep_reward += reward
+            self.handle_timestep_updates()
+
+            if done:
+                break
+        return current_ep_reward
+    
     def train(self):
-        np.random.seed(0)
+        self.time_step = 0
+        self.i_episode = 0
+        start_time = datetime.now().replace(microsecond=0)
+        print(f"Started training at (GMT): {start_time}")
+        with tqdm(total=self.max_training_timesteps) as pbar:
+            while self.time_step <= self.max_training_timesteps:
+                episode_reward = self.run_episode()
+                self.print_running_reward += episode_reward
+                self.print_running_episodes += 1
+                self.log_running_reward += episode_reward
+                self.log_running_episodes += 1
+                self.i_episode += 1
+                pbar.update(self.time_step/self.max_training_timesteps)
 
-        score_history = []
-        for eps in tqdm(range(2)):
-            obs,_ = self.env.reset()
-            terminal = False
-            score = 0
-            i = 0
-            while not terminal and i < 1000:
-                # print("step: ", i+1)
-                
-                act = self.agent.select_action(obs)
-                correct_dim_act = np.copy(act).reshape(1,-1)
-                new_state, reward, terminal, truncated, info = self.env.step(correct_dim_act)
-                self.agent.remember_transition(obs, act, reward, new_state, int(terminal))
-                self.agent.learn()
-                score += reward
-                obs = new_state
-
-                i = i + 1
-            score_history.append(score)
-
-        #if i % 25 == 0:
-        #    agent.save_models()
-
-        print('episode ', eps, 'score %.2f' % score,
-                'trailing 100 games avg %.3f' % np.mean(score_history[-100:]))
-        
+        end_time = datetime.now().replace(microsecond=0)
+        print(f"Finished training at (GMT): {end_time}")
+        print(f"Total training time: {end_time - start_time}")
+        self.log_file.close()
         self.env.close()
 
 
