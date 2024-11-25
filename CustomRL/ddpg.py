@@ -71,12 +71,13 @@ class MemoryReplayBuffer(object):
 class OUNoise(object):
     """Ornstein-Uhlenbeck process."""
 
-    def __init__(self, mu, theta=0.15, sigma=0.2, dt=1e-2):
+    def __init__(self, mu, theta=0.2, sigma=0.15, dt=1e-2, noise_decay=1.0):
         """Initialize parameters and noise process."""
         self.mu = mu
         self.theta = theta
         self.sigma = sigma
         self.dt = dt
+        self.noise_decay = noise_decay
         self.reset()
 
     def reset(self):
@@ -86,8 +87,9 @@ class OUNoise(object):
     def sample(self):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) * self.dt+ self.sigma * np.sqrt(self.dt) * np.random.normal(scale=0.5,size=self.mu.shape)
+        dx = self.theta * (self.mu - x) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(scale=3,size=self.mu.shape)
         self.state = x + dx
+        self.sigma = self.sigma * self.noise_decay
         return self.state
     
 class CriticNetwork(nn.Module):
@@ -134,7 +136,7 @@ class CriticNetwork(nn.Module):
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_critic)
 
         ##### Device
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def forward(self, state, action):
         
@@ -204,7 +206,7 @@ class ActorNetwork(nn.Module):
         # self.optimizer = torch.optim.Adam(self.parameters(), lr=lr_actor)
 
         ##### Device
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     def forward(self, state):
         # First Layer
@@ -224,12 +226,17 @@ class ActorNetwork(nn.Module):
         return x
 
 class DDPG:
-    def __init__(self, state_dim, action_size, lr_actor, lr_critic, gamma, tau, hidden_dim1=64, hidden_dim2=128, memory_size=100000, batch_size=64):
+    def __init__(self, state_dim, action_size, lr_actor, lr_critic, noise_decay, gamma, tau, hidden_dim1, hidden_dim2, memory_size, batch_size):
+        self.noise_decay = noise_decay
         self.gamma = gamma
         self.tau = tau
         self.action_size = action_size
         self.memory_size = memory_size
         self.batch_size = batch_size
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # self.device = torch.device("cpu")
 
         self.experience_replay_buffer = MemoryReplayBuffer(memory_size, state_dim, action_size)
 
@@ -243,7 +250,12 @@ class DDPG:
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_critic)
 
-        self.noise = OUNoise(np.zeros(action_size))
+        self.actor.to(self.device)
+        self.critic.to(self.device)
+        self.actor_target.to(self.device)
+        self.critic_target.to(self.device)
+
+        self.noise = OUNoise(mu=np.zeros(action_size), noise_decay=noise_decay)
 
         self.loss_fn = nn.MSELoss()
         self.update_network_parameters(tau=1.0)
@@ -253,10 +265,10 @@ class DDPG:
     
     def select_action(self, state):
         self.actor.eval()
-        state = torch.from_numpy(state).float().to(self.actor.device)
+        state = torch.from_numpy(state).float().to(self.device)
         # print("State: ", state)
         
-        action = self.actor(state).detach().data.numpy().flatten()
+        action = self.actor(state).detach().cpu().data.numpy().flatten()
         # print("Action: ", action)
 
         # Add noise to action to encourage exploration
@@ -267,6 +279,7 @@ class DDPG:
         self.actor.train()
 
         return action
+
     
     def learn(self):
         
@@ -277,17 +290,18 @@ class DDPG:
         # sample from replay buffer using batch training
         state, action, reward, next_state, terminal = self.experience_replay_buffer.sample(self.batch_size)
         # convert to tensors
-        state = torch.from_numpy(state).float().to(self.actor.device)
-        action = torch.from_numpy(action).float().to(self.actor.device)
-        reward = torch.from_numpy(reward).float().to(self.actor.device)
-        next_state = torch.from_numpy(next_state).float().to(self.actor.device)
-        terminal = torch.from_numpy(terminal).float().to(self.actor.device)
-
+        state = torch.from_numpy(state).float().to(self.device)
+        action = torch.from_numpy(action).float().to(self.device)
+        reward = torch.from_numpy(reward).float().to(self.device)
+        next_state = torch.from_numpy(next_state).float().to(self.device)
+        terminal = torch.from_numpy(terminal).float().to(self.device)
         # Turn both networks into evaluation mode
         self.actor.eval()
         self.critic.eval()
         # Calculate target q value and current q value
+        
         with torch.no_grad():
+            # print("calculating on device: ", self.critic.device)
             current_q_value = self.critic(state, action)
             next_action = self.actor_target(next_state)
             next_q_value = self.critic_target(next_state, next_action)
@@ -302,7 +316,7 @@ class DDPG:
 
             # calculate target q value
             target_q_value = reward.unsqueeze(1) + self.gamma * next_q_value * (1 - terminal.unsqueeze(1))
-            target_q_value = target_q_value.detach()
+            # target_q_value = target_q_value.detach()
 
         # Turn both networks into training mode for gradient updates
         self.critic.train()

@@ -14,7 +14,7 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
 class DroneTrainer:
-    def __init__(self, max_training_timesteps=int(3e6),tau=0.001, gamma=0.99, lr_actor=0.000025, lr_critic=0.00025, hidden_dim1=64, hidden_dim2=128, memory_size=int(100000), batch_size=64):
+    def __init__(self, max_training_timesteps=int(3e6), tau=0.001, gamma=0.99, lr_actor=0.000025, lr_critic=0.00025, noise_decay = 0.995, hidden_dim1=128, hidden_dim2=64, memory_size=int(100000), batch_size=64):
         self.max_training_timesteps = max_training_timesteps
         self.tau = tau
         self.gamma = gamma
@@ -24,6 +24,7 @@ class DroneTrainer:
         self.hidden_dim2 = hidden_dim2  
         self.memory_size = int(memory_size)
         self.batch_size = batch_size
+        self.noise_decay = noise_decay
         self.default_settings()
         self.initialize_environment()
         self.initialize_agent()
@@ -62,6 +63,7 @@ class DroneTrainer:
             self.action_dim,
             self.lr_actor,
             self.lr_critic,
+            self.noise_decay,
             self.gamma,
             self.tau,
             self.hidden_dim1,
@@ -153,7 +155,7 @@ class DroneTrainer:
                 self.log_running_reward += episode_reward
                 self.log_running_episodes += 1
                 self.i_episode += 1
-                pbar.update(self.time_step/self.max_training_timesteps)
+                pbar.update(self.time_step - pbar.n)
 
         end_time = datetime.now().replace(microsecond=0)
         print(f"Finished training at (GMT): {end_time}")
@@ -163,5 +165,5 @@ class DroneTrainer:
 
 
 if __name__ == "__main__":
-    trainer = DroneTrainer(max_training_timesteps=1e6, tau=1e-3, hidden_dim1=512, hidden_dim2=256, memory_size=1e5, batch_size=128)
+    trainer = DroneTrainer(max_training_timesteps=int(1e6), tau=0.001, gamma=0.99, lr_actor=0.00025, lr_critic=0.0025, noise_decay = 0.999, hidden_dim1=512, hidden_dim2=256, memory_size=int(1e6), batch_size=64)
     trainer.train()
