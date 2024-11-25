@@ -16,7 +16,7 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
                  physics: Physics = Physics.PYB,
                  pyb_freq: int = 240,
                  ctrl_freq: int = 30,
-                 gui=False,
+                 gui=True,
                  record=True,
                  obs: ObservationType = ObservationType.KIN,
                  act: ActionType = ActionType.RPM
@@ -43,61 +43,76 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
 
         # Non-goal gate
         p.loadURDF(str(urdf_path),
-                   [0, -1, 0.5],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT)
+                [0, -1, 0.5],
+                p.getQuaternionFromEuler([0, 0, 0]),
+                useFixedBase=True,  
+                physicsClientId=self.CLIENT)
 
         # Goal gate (green color)
         goal_gate_id = p.loadURDF(str(urdf_path),
-                                  [0.5, -1, 0.5],
-                                  p.getQuaternionFromEuler([0, 0, 0]),
-                                  physicsClientId=self.CLIENT)
+                                [0.5, -1.5, 0.5],
+                                p.getQuaternionFromEuler([0, 0, 0]),
+                                useFixedBase=True,  
+                                physicsClientId=self.CLIENT)
         p.changeVisualShape(goal_gate_id, -1, rgbaColor=[0, 1, 0, 1])
 
         # Create pillars for both gates
-        for i in range(8):  # Pillar height adjustment
+        for i in range(8):  
             # Non-goal gate pillars
             p.loadURDF("cube_small.urdf",
-                       [-0.25, -1, 0.05 + i * 0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT)
+                    [-0.25, -1, 0.05 + i * 0.05],
+                    p.getQuaternionFromEuler([0, 0, 0]),
+                    useFixedBase=True,  
+                    physicsClientId=self.CLIENT)
             p.loadURDF("cube_small.urdf",
-                       [0.25, -1, 0.05 + i * 0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT)
+                    [0.25, -1, 0.05 + i * 0.05],
+                    p.getQuaternionFromEuler([0, 0, 0]),
+                    useFixedBase=True,  
+                    physicsClientId=self.CLIENT)
 
             # Goal gate pillars
             p.loadURDF("cube_small.urdf",
-                       [0.25, -1.5, 0.05 + i * 0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT)
+                    [0.25, -1.5, 0.05 + i * 0.05],
+                    p.getQuaternionFromEuler([0, 0, 0]),
+                    useFixedBase=True,  
+                    physicsClientId=self.CLIENT)
             p.loadURDF("cube_small.urdf",
-                       [0.75, -1.5, 0.05 + i * 0.05],
-                       p.getQuaternionFromEuler([0, 0, 0]),
-                       physicsClientId=self.CLIENT)
+                    [0.75, -1.5, 0.05 + i * 0.05],
+                    p.getQuaternionFromEuler([0, 0, 0]),
+                    useFixedBase=True,  
+                    physicsClientId=self.CLIENT)
+
 
     def _computeReward(self):
         """Computes the current reward value."""
         state = self._getDroneStateVector(0)
         drone_position = state[0:3]
+        drone_velocity = state[10:13]  
         goal_position = np.array([0.5, -1.5, 0.5])  # Goal gate position
 
-        # Distance rewards
+        # Distance to the goal
         distance_to_goal = np.linalg.norm(drone_position - goal_position)
-        distance_reward = 1 - np.tanh(2 * distance_to_goal)  # Smooth reward for proximity to goal
+
+        # Reward for being closer to the goal
+        distance_reward = 1 - np.tanh(2 * distance_to_goal)  
+
+        # Directional penalty for moving away from the goal
+        direction_to_goal = (goal_position - drone_position) / (np.linalg.norm(goal_position - drone_position) + 1e-6)  
+        velocity_along_direction = np.dot(drone_velocity, direction_to_goal)  
+        directional_penalty = -5 if velocity_along_direction < -0.1 else 0  
 
         # Gate passage rewards
         reward = 0
-        if (0.25 <= drone_position[0] <= 0.75) and (-1.6 <= drone_position[1] <= -1.4) and (drone_position[2] <= 0.55):
-            reward += 30  # Big reward for successfully passing the goal gate
+        if (0.25 <= drone_position[0] <= 0.75) and (-1.6 <= drone_position[1] <= -1.4) and (0.45 <= drone_position[2] <= 0.55):
+            reward += 30  
 
-        # Penalty for passing the non-goal gate
-        if (-0.25 <= drone_position[0] <= 0.25) and (-1.1 <= drone_position[1] <= -0.9) and (drone_position[2] <= 0.55):
-            reward -= 15  # Hefty penalty for passing the non-goal gate
+        # Penalty for passing through the non-goal gate
+        if (-0.25 <= drone_position[0] <= 0.25) and (-1.1 <= drone_position[1] <= -0.9) and (0.45 <= drone_position[2] <= 0.55):
+            reward -= 15  
 
         # Stability reward (encourages smooth and controlled flight)
-        orientation_penalty = abs(state[7]) + abs(state[8])  # Penalize roll and pitch deviations
-        stability_reward = max(0, 1 - orientation_penalty)
+        orientation_penalty = abs(state[7]) + abs(state[8])  
+        stability_reward = max(0, 1 - orientation_penalty)  
 
         # Height penalty (discourages flying too high or too low)
         if drone_position[2] > 0.6:
@@ -108,15 +123,20 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
             height_penalty = 0
 
         # Total reward calculation
-        reward += distance_reward
-        reward += stability_reward
-        reward -= height_penalty
+        reward += distance_reward  
+        reward += stability_reward  
+        reward -= height_penalty  
+        reward += directional_penalty  
 
-        # Debugging output
+        
         if self.GUI:
-            print(f"Step {self.step_counter}: reward = {reward}, distance_reward = {distance_reward}, stability_reward = {stability_reward}, height_penalty = {height_penalty}")
+            print(f"Step {self.step_counter}:")
+            print(f"  reward = {reward}")
+            print(f"  distance_reward = {distance_reward}, stability_reward = {stability_reward}")
+            print(f"  height_penalty = {height_penalty}, directional_penalty = {directional_penalty}")
 
         return reward
+
 
 
     def _computeTerminated(self):

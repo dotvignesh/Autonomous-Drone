@@ -36,7 +36,7 @@ class DroneTrainer:
         self.action_std_decay_rate = 0.05
         self.min_action_std = 0.1
         self.action_std_decay_freq = int(2.5e5)
-        self.max_training_timesteps = int(10000)
+        self.max_training_timesteps = int(500000)
         self.ppo_epochs = 80  
         self.eps_clip = 0.2
         self.gamma = 0.98  
