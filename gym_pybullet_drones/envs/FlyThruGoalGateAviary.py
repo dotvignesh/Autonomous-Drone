@@ -16,7 +16,7 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
                  physics: Physics = Physics.PYB,
                  pyb_freq: int = 240,
                  ctrl_freq: int = 30,
-                 gui=True,
+                 gui=False,
                  record=True,
                  obs: ObservationType = ObservationType.KIN,
                  act: ActionType = ActionType.RPM
@@ -84,59 +84,44 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
 
 
     def _computeReward(self):
-        """Computes the current reward value."""
+        """Improved reward function to guide the drone to the goal gate."""
         state = self._getDroneStateVector(0)
         drone_position = state[0:3]
         drone_velocity = state[10:13]  
         goal_position = np.array([0.5, -1.5, 0.5])  # Goal gate position
 
-        # Distance to the goal
         distance_to_goal = np.linalg.norm(drone_position - goal_position)
+        distance_reward = 10 * (1 - np.tanh(2 * distance_to_goal))  
 
-        # Reward for being closer to the goal
-        distance_reward = 1 - np.tanh(2 * distance_to_goal)  
-
-        # Directional penalty for moving away from the goal
-        direction_to_goal = (goal_position - drone_position) / (np.linalg.norm(goal_position - drone_position) + 1e-6)  
-        velocity_along_direction = np.dot(drone_velocity, direction_to_goal)  
-        directional_penalty = -5 if velocity_along_direction < -0.1 else 0  
+        direction_to_goal = (goal_position - drone_position) / (np.linalg.norm(goal_position - drone_position) + 1e-6)
+        velocity_along_direction = np.dot(drone_velocity, direction_to_goal)
+        directional_reward = max(0, 5 * velocity_along_direction) 
 
         # Gate passage rewards
         reward = 0
         if (0.25 <= drone_position[0] <= 0.75) and (-1.6 <= drone_position[1] <= -1.4) and (0.45 <= drone_position[2] <= 0.55):
-            reward += 30  
+            reward += 50  
 
         # Penalty for passing through the non-goal gate
         if (-0.25 <= drone_position[0] <= 0.25) and (-1.1 <= drone_position[1] <= -0.9) and (0.45 <= drone_position[2] <= 0.55):
-            reward -= 15  
+            reward -= 40  
 
-        # Stability reward (encourages smooth and controlled flight)
-        orientation_penalty = abs(state[7]) + abs(state[8])  
+        orientation_penalty = abs(state[7]) + abs(state[8])
         stability_reward = max(0, 1 - orientation_penalty)  
 
-        # Height penalty (discourages flying too high or too low)
+        height_penalty = 0
         if drone_position[2] > 0.6:
             height_penalty = (drone_position[2] - 0.6) * 2
         elif drone_position[2] < 0.2:
             height_penalty = (0.2 - drone_position[2]) * 2
-        else:
-            height_penalty = 0
 
         # Total reward calculation
         reward += distance_reward  
+        reward += directional_reward  
         reward += stability_reward  
         reward -= height_penalty  
-        reward += directional_penalty  
-
-        
-        if self.GUI:
-            print(f"Step {self.step_counter}:")
-            print(f"  reward = {reward}")
-            print(f"  distance_reward = {distance_reward}, stability_reward = {stability_reward}")
-            print(f"  height_penalty = {height_penalty}, directional_penalty = {directional_penalty}")
 
         return reward
-
 
 
     def _computeTerminated(self):
@@ -149,15 +134,16 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
         """Computes the current truncated value."""
         state = self._getDroneStateVector(0)
 
-        # Check position and tilt limits
-        if abs(state[0]) > 1.5 or abs(state[1]) > 2.5 or state[2] > 1.0:
+        if abs(state[0]) > 2.0 or abs(state[1]) > 3.0 or state[2] > 1.2: 
             return True
-        if abs(state[7]) > 0.4 or abs(state[8]) > 0.4:
+        if abs(state[7]) > 0.5 or abs(state[8]) > 0.5:
             return True
 
-        # Time limit
-        if self.step_counter/self.PYB_FREQ > self.EPISODE_LEN_SEC:
+        if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
             return True
+
+        return False
+
 
     def _computeInfo(self):
         """Computes the current info dict(s)."""
@@ -173,7 +159,7 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
         MAX_XY = MAX_LIN_VEL_XY*self.EPISODE_LEN_SEC
         MAX_Z = MAX_LIN_VEL_Z*self.EPISODE_LEN_SEC
 
-        MAX_PITCH_ROLL = np.pi # Full range
+        MAX_PITCH_ROLL = np.pi 
 
         clipped_pos_xy = np.clip(state[0:2], -MAX_XY, MAX_XY)
         clipped_pos_z = np.clip(state[2], 0, MAX_Z)
@@ -193,7 +179,7 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
         normalized_pos_xy = clipped_pos_xy / MAX_XY
         normalized_pos_z = clipped_pos_z / MAX_Z
         normalized_rp = clipped_rp / MAX_PITCH_ROLL
-        normalized_y = state[9] / np.pi # No reason to clip
+        normalized_y = state[9] / np.pi 
         normalized_vel_xy = clipped_vel_xy / MAX_LIN_VEL_XY
         normalized_vel_z = clipped_vel_z / MAX_LIN_VEL_XY
         normalized_ang_vel = state[13:16]/np.linalg.norm(state[13:16]) if np.linalg.norm(state[13:16]) != 0 else state[13:16]

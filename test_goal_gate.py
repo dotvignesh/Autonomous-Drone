@@ -23,7 +23,7 @@ CRITIC_LR = 0.001
 GAMMA = 0.99
 K_EPOCHS = 80
 EPS_CLIP = 0.2
-CHECKPOINT_PATH = "log_dir_goal/goal_training/best_goal.pth"
+CHECKPOINT_PATH = "log_dir/goal_training/best_goal.pth"
 
 # Test environment configuration  
 TEST_EPISODE_EXTRA_TIME = 20  # Extra seconds added to EPISODE_LEN_SEC for testing
@@ -40,7 +40,7 @@ def load_agent(checkpoint_path):
     print(f"Loading trained model from: {checkpoint_path}")
     agent.load(checkpoint_path)
 
-    agent.save("best_goal.pth")
+    agent.save("tested_goal_gate.pth")
     return agent
 
 def test_episode(env, agent, max_steps, render=True):
