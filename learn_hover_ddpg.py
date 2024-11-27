@@ -14,7 +14,7 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
 class DroneTrainer:
-    def __init__(self, max_training_timesteps=int(3e6), tau=0.001, gamma=0.99, lr_actor=0.000025, lr_critic=0.00025, noise_decay = 0.995, hidden_dim1=128, hidden_dim2=64, memory_size=int(100000), batch_size=64):
+    def __init__(self, max_training_timesteps=int(3e6), tau=0.001, gamma=0.99, lr_actor=0.000025, lr_critic=0.00025, noise_decay = None, hidden_dim1=128, hidden_dim2=64, memory_size=int(100000), batch_size=64):
         self.max_training_timesteps = max_training_timesteps
         self.tau = tau
         self.gamma = gamma
@@ -30,6 +30,7 @@ class DroneTrainer:
         self.initialize_agent()
         self.setup_logging()
         self.best_reward = 0
+        np.random.seed(0)
 
     def default_settings(self):
         self.gui_enabled = True
@@ -124,7 +125,7 @@ class DroneTrainer:
         self.agent.save(checkpoint_path)
 
     def run_episode(self):
-        obs, info = self.env.reset(seed=42, options={})
+        obs, info = self.env.reset()
         current_ep_reward = 0
 
         for _ in range(self.episode_length):
@@ -137,9 +138,12 @@ class DroneTrainer:
             self.agent.learn()
             current_ep_reward += reward
             self.handle_timestep_updates()
-
+            
             if done:
                 break
+        
+        self.agent.reset_OU_noise()
+        self.agent.decay_OU_noise()
         return current_ep_reward
     
     def train(self):
@@ -165,5 +169,5 @@ class DroneTrainer:
 
 
 if __name__ == "__main__":
-    trainer = DroneTrainer(max_training_timesteps=int(1e6), tau=0.001, gamma=0.99, lr_actor=0.00025, lr_critic=0.0025, noise_decay = 0.999, hidden_dim1=512, hidden_dim2=256, memory_size=int(1e6), batch_size=64)
+    trainer = DroneTrainer(max_training_timesteps=int(1e6), tau=1e-3, gamma=0.99, lr_actor=0.00005, lr_critic=0.0005, noise_decay=0.999, hidden_dim1=512, hidden_dim2=512, memory_size=int(1e6), batch_size=128)
     trainer.train()

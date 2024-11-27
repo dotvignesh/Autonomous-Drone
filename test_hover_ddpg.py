@@ -23,7 +23,7 @@ NOISE_DECAY = 0.995
 GAMMA = 0.99
 TAU = 0.001
 HIDDEN_DIM1 = 512
-HIDDEN_DIM2 = 256
+HIDDEN_DIM2 = 512
 MEMORY_SIZE = 100000
 BATCH_SIZE = 64
 
@@ -54,6 +54,9 @@ def test_episode(env, agent, max_steps, render=True):
     frame_start = time.time()
 
     for step in range(max_steps):
+
+        # time.sleep(0.5)
+        
         action = agent.select_action(obs)
         obs, reward, terminated, truncated, _ = env.step(np.expand_dims(action, axis=0))
         cumulative_reward += reward
@@ -79,6 +82,7 @@ def test():
     # Calculate max steps for the test
     max_steps = int((env.EPISODE_LEN_SEC + TEST_EPISODE_EXTRA_TIME) * env.CTRL_FREQ)
 
+    
     # Run a test episode
     total_reward = test_episode(env, agent, max_steps)
 

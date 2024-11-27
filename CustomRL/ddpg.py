@@ -3,6 +3,36 @@ import torch.nn as nn
 import numpy as np
 from torch.distributions import MultivariateNormal
 
+######## Implementation for OU Noise based from https://soeren-kirchner.medium.com/deep-deterministic-policy-gradient-ddpg-with-and-without-ornstein-uhlenbeck-process-e6d272adfc3
+class OUNoise(object):
+    """Ornstein-Uhlenbeck process."""
+
+    def __init__(self, mu, theta=0.2, sigma=0.3, dt=1e-2, noise_decay=None):
+        """Initialize parameters and noise process."""
+        self.mu = mu
+        self.theta = theta
+        self.sigma = sigma
+        self.dt = dt
+        self.noise_decay = 0.9999 if noise_decay is None else noise_decay
+        self.min_sigma = 0.1
+        self.reset()
+
+    def reset(self):
+        """Reset the internal state (= noise) to mean (mu)."""
+        self.state = np.copy(self.mu) 
+
+    def sample(self):
+        """Update internal state and return it as a noise sample."""
+        x = self.state
+        dx = self.theta * (self.mu - x) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(scale=1,size=self.mu.shape)
+        self.state = x + dx
+        # self.sigma = max(self.sigma * self.noise_decay, self.min_sigma)
+        # self.sigma *= np.exp(-self.noise_decay * self.dt)
+        return self.state
+    
+    def decay_sigma(self):
+        if self.sigma >= self.min_sigma:
+            self.sigma = self.sigma * self.noise_decay
 
 class MemoryReplayBuffer(object):
     def __init__(self, max_size, input_shape, action_size):
@@ -43,7 +73,8 @@ class MemoryReplayBuffer(object):
         self.new_state_mem[index] = next_state
         self.terminal_mem[index] = 1 - terminal
         self.memory_index = (self.memory_index + 1) % self.max_size
-        self.current_memory += 1 if self.current_memory < self.max_size else 0
+        self.current_memory += 1 
+        # self.current_memory += 1 if self.current_memory < self.max_size else 0
 
     def sample(self, batch_size):
         """
@@ -66,31 +97,6 @@ class MemoryReplayBuffer(object):
 
         return states, actions, rewards, next_states, dones
     
-
-######## Implementation for OU Noise based from https://soeren-kirchner.medium.com/deep-deterministic-policy-gradient-ddpg-with-and-without-ornstein-uhlenbeck-process-e6d272adfc3
-class OUNoise(object):
-    """Ornstein-Uhlenbeck process."""
-
-    def __init__(self, mu, theta=0.2, sigma=0.15, dt=1e-2, noise_decay=1.0):
-        """Initialize parameters and noise process."""
-        self.mu = mu
-        self.theta = theta
-        self.sigma = sigma
-        self.dt = dt
-        self.noise_decay = noise_decay
-        self.reset()
-
-    def reset(self):
-        """Reset the internal state (= noise) to mean (mu)."""
-        self.state = np.copy(self.mu) 
-
-    def sample(self):
-        """Update internal state and return it as a noise sample."""
-        x = self.state
-        dx = self.theta * (self.mu - x) * self.dt + self.sigma * np.sqrt(self.dt) * np.random.normal(scale=3,size=self.mu.shape)
-        self.state = x + dx
-        self.sigma = self.sigma * self.noise_decay
-        return self.state
     
 class CriticNetwork(nn.Module):
     def __init__(self, lr_critic, state_dim, hidden_dim1, hidden_dim2, action_size):
@@ -127,7 +133,7 @@ class CriticNetwork(nn.Module):
         self.act_value = nn.Linear(action_size, hidden_dim2)
 
         ##### Final Layer to get q value of state action pair
-        fq = 0.005
+        fq = 0.003
         self.finalq = nn.Linear(hidden_dim2, 1)
         torch.nn.init.uniform_(self.finalq.weight.data, -fq, fq)
         torch.nn.init.uniform_(self.finalq.bias.data, -fq, fq)
@@ -197,7 +203,7 @@ class ActorNetwork(nn.Module):
 
         ##### Final Layer to get action values
         self.actions = nn.Linear(hidden_dim2, action_size)
-        action_weight = 0.005
+        action_weight = 0.003
         torch.nn.init.uniform_(self.actions.weight.data, -action_weight, action_weight)
         torch.nn.init.uniform_(self.actions.bias.data, -action_weight, action_weight)
 
@@ -272,9 +278,13 @@ class DDPG:
         # print("Action: ", action)
 
         # Add noise to action to encourage exploration
-        action_with_noise = action + self.noise.sample()
+        added_noise = self.noise.sample()
+        # print("Noise: ", added_noise)
+        action_with_noise = action + added_noise
         action = np.clip(action_with_noise, -1, 1)
         # print("Action with noise: ", action)
+
+        # print("Selected Action", action)
         
         self.actor.train()
 
@@ -295,9 +305,12 @@ class DDPG:
         reward = torch.from_numpy(reward).float().to(self.device)
         next_state = torch.from_numpy(next_state).float().to(self.device)
         terminal = torch.from_numpy(terminal).float().to(self.device)
+        
         # Turn both networks into evaluation mode
         self.actor.eval()
         self.critic.eval()
+        self.actor_target.eval()
+        self.critic_target.eval()
         # Calculate target q value and current q value
         
         with torch.no_grad():
@@ -321,6 +334,8 @@ class DDPG:
         # Turn both networks into training mode for gradient updates
         self.critic.train()
         self.actor.train()
+        self.actor_target.train()
+        self.critic_target.train()
 
         current_q_value = self.critic(state, action)
 
@@ -363,6 +378,12 @@ class DDPG:
 
         self.actor_target.load_state_dict(actor_state_dict)
         self.critic_target.load_state_dict(critic_state_dict)
+
+    def reset_OU_noise(self):
+        self.noise.reset()
+
+    def decay_OU_noise(self):
+        self.noise.decay_sigma()
 
     def save(self, checkpoint_path):
         torch.save(self.actor.state_dict(), checkpoint_path)
