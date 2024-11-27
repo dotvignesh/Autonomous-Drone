@@ -40,7 +40,7 @@ def setup_environment(output_folder):
     return HoverAviary(gui=DEFAULT_GUI, obs=DEFAULT_OBS, act=DEFAULT_ACT, record=DEFAULT_RECORD_VIDEO)
 
 def load_agent(checkpoint_path):
-    """Initialize and load a PPO agent from the given checkpoint path."""
+    """Initialize and load a DDPG agent from the given checkpoint path."""
     agent = DDPG(STATE_DIM, ACTION_DIM, LR_ACTOR, LR_CRITIC, NOISE_DECAY, GAMMA, TAU, HIDDEN_DIM1, HIDDEN_DIM2, MEMORY_SIZE, BATCH_SIZE)
     print(f"Loading trained model from: {checkpoint_path}")
     agent.load(checkpoint_path)
