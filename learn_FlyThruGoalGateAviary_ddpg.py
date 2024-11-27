@@ -77,7 +77,7 @@ class DroneTrainer:
         if not os.path.exists(self.checkpoint_base):
             os.makedirs(self.checkpoint_base)
 
-        self.log_file_path = os.path.join(self.log_dir, f"Train_Hover_LOG_{self.run_id}.csv")
+        self.log_file_path = os.path.join(self.log_dir, f"Train_FlyThruGoalGate_LOG_{self.run_id}.csv")
         self.log_file = open(self.log_file_path, "w+")
         self.log_file.write("episode,timestep,reward\n")
 
