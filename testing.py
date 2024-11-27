@@ -1,78 +1,88 @@
-import os
-import time
-from datetime import datetime
 import numpy as np
+import gym
+import gym_pybullet_drones
 from gym_pybullet_drones.envs.CircuitAviary import CircuitAviary
-from gym_pybullet_drones.utils.utils import sync
-from gym_pybullet_drones.utils.enums import ObservationType, ActionType
+from gym_pybullet_drones.utils.enums import ActionType
 
-# Constants for default settings
-DEFAULT_GUI = True
-DEFAULT_RECORD_VIDEO = False
-DEFAULT_OUTPUT_FOLDER = 'results'
-DEFAULT_OBS = ObservationType('kin')
-DEFAULT_ACT = ActionType('rpm')
+class SimpleModel:
+    """A simple model that sends a list of target [x, y, z] coordinates to the environment."""
+    
+    def __init__(self, gates_positions, circuit_radius):
+        # Calculate the middle points between gates considering the radius
+        self.target_positions = []
+        self.circuit_radius = circuit_radius
+        self.calculate_middle_points(gates_positions)
+        self.current_target_idx = 0  # Start with the first target position
 
-def setup_environment(output_folder):
-    """Create the Circuit Aviary environment and ensure output folder exists."""
-    output_dir = os.path.join(output_folder, f'recording_{datetime.now().strftime("%m.%d.%Y_%H.%M.%S")}')
-    os.makedirs(output_dir, exist_ok=True)
-    return CircuitAviary(gui=DEFAULT_GUI, obs=DEFAULT_OBS, act=DEFAULT_ACT, record=DEFAULT_RECORD_VIDEO)
-
-def horizontal_circle_motion(t, base_rpm=4100, amplitude=200):
-    """Generate RPMs for horizontal circular motion."""
-    # All rotors maintain similar base RPM for stable height
-    rpms = np.array([base_rpm, base_rpm, base_rpm, base_rpm])
-    
-    # Add differential RPMs for horizontal rotation
-    # Front left and back right vs front right and back left
-    differential = amplitude * np.sin(t)
-    rpms[[0, 3]] += differential  # Front left and back right
-    rpms[[1, 2]] -= differential  # Front right and back left
-    
-    return np.expand_dims(rpms, axis=0)
-
-def main():
-    """Main function to demonstrate horizontal circular flight."""
-    print("===== Starting Horizontal Circular Flight Demo =====")
-
-    # Initialize environment
-    env = setup_environment(DEFAULT_OUTPUT_FOLDER)
-    
-    # Initial reset
-    obs, _ = env.reset(seed=42, options={})
-    
-    # Flight parameters
-    duration = 5  # seconds
-    steps = int(duration * env.CTRL_FREQ)
-    frame_start = time.time()
-    
-    # Give some time to stabilize height first
-    print("Stabilizing height...")
-    for _ in range(int(env.CTRL_FREQ)):  # 1 second stabilization
-        action = np.array([[4100, 4100, 4100, 4100]])  # Stable hover
-        obs, _, _, _, _ = env.step(action)
-        env.render()
-        
-    print("Starting circular motion...")
-    # Main control loop for circular motion
-    for step in range(steps):
-        # Generate horizontal circular motion
-        t = 2 * np.pi * step / steps
-        action = horizontal_circle_motion(t)
+    def calculate_middle_points(self, gates_positions):
+        """Calculate the middle points between consecutive gates while accounting for the circuit radius."""
+        for i in range(len(gates_positions)):
+            # Get the current and next gate (wrap around to the first one after the last gate)
+            current_gate = gates_positions[i]
+            next_gate = gates_positions[(i + 1) % len(gates_positions)]
             
-        # Apply action to environment
-        obs, reward, terminated, truncated, _ = env.step(action)
-        
-        # Render and sync
-        env.render()
-        sync(step, frame_start, env.CTRL_TIMESTEP)
-        
-        if terminated or truncated:
-            break
+            # Calculate the midpoint between the two gates
+            midpoint = [(current_gate[0] + next_gate[0]) / 2,
+                        (current_gate[1] + next_gate[1]) / 2,
+                        0.55]  # Keeping the height constant for simplicity
+            
+            # Ensure the midpoint lies on the circle by adjusting the x and y to match the circuit radius
+            dist = np.sqrt(midpoint[0]**2 + midpoint[1]**2)
+            midpoint[0] = (midpoint[0] / dist) * self.circuit_radius
+            midpoint[1] = (midpoint[1] / dist) * self.circuit_radius
+            
+            self.target_positions.append(midpoint)
 
-    print("===== Flight Demo Complete =====")
-    env.close()
+    def get_action(self, state):
+        """Cycle through the list of target positions."""
+        # Return the current target position
+        action = self.target_positions[self.current_target_idx]
+        
+        # Move to the next target position in the list
+        self.current_target_idx = (self.current_target_idx + 1) % len(self.target_positions)
+        
+        return action
 
-if __name__ == '__main__':
-    main()
+
+# Custom environment setup using ActionType.PID
+env = CircuitAviary(
+    act=ActionType.PID,  # Using PID controller for action type
+    gui=True,
+    record=False
+)
+
+# Gate positions from the environment setup
+gates_positions = []
+NUM_GATES = 8  # Number of gates
+CIRCUIT_RADIUS = 2.0  # Radius of the circuit
+
+# Generate the gate positions along the circular path
+for i in range(NUM_GATES):
+    angle = (2 * np.pi * i) / NUM_GATES
+    x = CIRCUIT_RADIUS * np.cos(angle)
+    y = CIRCUIT_RADIUS * np.sin(angle)
+    gates_positions.append([x, y])
+
+# Get the circuit radius
+circuit_radius = CIRCUIT_RADIUS
+
+# Initialize the model with the list of target positions (midpoints between gates)
+model = SimpleModel(gates_positions=gates_positions, circuit_radius=circuit_radius)
+
+# Reset the environment
+state = env.reset()
+
+# Run the environment with the model controlling the drone
+done = False
+while not done:
+    # Get the model's action (next target position)
+    action = model.get_action(state)
+    
+    # Take a step in the environment with the target [x, y, z]
+    state, reward, done, info, _ = env.step(action)
+    
+    # Optionally print state or reward for debugging purposes
+    print(f"State: {state}, Reward: {reward}")
+
+# Close the environment after the episode is done
+env.close()
