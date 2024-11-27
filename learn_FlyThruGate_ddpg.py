@@ -46,6 +46,7 @@ class DroneTrainer:
 
         self.random_seed = 0
         self.log_dir = "log_dir/"
+
         self.run_id = "FlyThruGateAviary_ddpg"
         self.checkpoint_base = os.path.join(self.log_dir, self.run_id)
 
@@ -151,6 +152,7 @@ class DroneTrainer:
         self.i_episode = 0
         start_time = datetime.now().replace(microsecond=0)
         print(f"Started training at (GMT): {start_time}")
+
         print("Training on: ", self.agent.device)
         with tqdm(total=self.max_training_timesteps) as pbar:
             while self.time_step <= self.max_training_timesteps:
