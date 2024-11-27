@@ -169,5 +169,5 @@ class DroneTrainer:
 
 
 if __name__ == "__main__":
-    trainer = DroneTrainer(max_training_timesteps=int(1e6), tau=1e-3, gamma=0.99, lr_actor=0.00005, lr_critic=0.0005, noise_decay=0.999, hidden_dim1=512, hidden_dim2=512, memory_size=int(1e6), batch_size=128)
+    trainer = DroneTrainer(max_training_timesteps=int(1.5e5), tau=1e-3, gamma=0.99, lr_actor=0.00005, lr_critic=0.0005, noise_decay=0.999, hidden_dim1=512, hidden_dim2=512, memory_size=int(1e6), batch_size=128)
     trainer.train()
