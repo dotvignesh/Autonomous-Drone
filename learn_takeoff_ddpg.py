@@ -9,7 +9,7 @@ from tqdm import tqdm
 from CustomRL.ddpg import DDPG
 
 from gym_pybullet_drones.utils.Logger import Logger
-from gym_pybullet_drones.envs.FlyThruGoalGateAviary import FlyThruGoalGateAviary
+from gym_pybullet_drones.envs.TakeoffAviary import TakeoffAviary
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
@@ -46,13 +46,13 @@ class DroneTrainer:
 
         self.random_seed = 0
         self.log_dir = "log_dir/"
-        self.run_id = "FlyThruGoalGateAviary_ddpg"
+        self.run_id = "takeoff_ddpg"
         self.checkpoint_base = os.path.join(self.log_dir, self.run_id)
 
         self.save_model_freq = int(1e5)
 
     def initialize_environment(self):
-        self.env = FlyThruGoalGateAviary(obs=self.obs_type, act=self.act_type)
+        self.env = TakeoffAviary(obs=self.obs_type, act=self.act_type)
         self.episode_length = self.env.EPISODE_LEN_SEC * self.env.CTRL_FREQ
         self.update_timestep = self.episode_length * 4
         self.log_freq = self.episode_length * 2
@@ -77,7 +77,7 @@ class DroneTrainer:
         if not os.path.exists(self.checkpoint_base):
             os.makedirs(self.checkpoint_base)
 
-        self.log_file_path = os.path.join(self.log_dir, f"Train_FlyThruGoalGate_LOG_{self.run_id}.csv")
+        self.log_file_path = os.path.join(self.log_dir, f"Train_Takeoff_LOG_{self.run_id}.csv")
         self.log_file = open(self.log_file_path, "w+")
         self.log_file.write("episode,timestep,reward\n")
 
@@ -107,7 +107,7 @@ class DroneTrainer:
 
             if avg_reward > self.best_reward:
                 self.best_reward = avg_reward
-                best_model_path = os.path.join(self.checkpoint_base, "best_FlyThruGoalGateAviary_ddpg.pth")
+                best_model_path = os.path.join(self.checkpoint_base, "best_takeoff_ddpg.pth")
                 print(f"New best model found! Saving as: {best_model_path}")
                 self.agent.save(best_model_path)
 
@@ -119,7 +119,7 @@ class DroneTrainer:
 
     def save_model(self):
         checkpoint_path = os.path.join(
-            self.checkpoint_base, f"{self.i_episode}_checkpoint_hover.pth"
+            self.checkpoint_base, f"{self.i_episode}_checkpoint_takeoff_ddpg.pth"
         )
         print(f"Saving model at: {checkpoint_path}")
         self.agent.save(checkpoint_path)
@@ -169,5 +169,5 @@ class DroneTrainer:
 
 
 if __name__ == "__main__":
-    trainer = DroneTrainer(max_training_timesteps=int(1.5e5), tau=1e-3, gamma=0.99, lr_actor=0.00005, lr_critic=0.0005, noise_decay=0.999, hidden_dim1=512, hidden_dim2=512, memory_size=int(1e6), batch_size=128)
+    trainer = DroneTrainer(max_training_timesteps=int(5e5), tau=1e-3, gamma=0.99, lr_actor=0.00005, lr_critic=0.0005, noise_decay=0.9999, hidden_dim1=512, hidden_dim2=512, memory_size=int(1e6), batch_size=128)
     trainer.train()

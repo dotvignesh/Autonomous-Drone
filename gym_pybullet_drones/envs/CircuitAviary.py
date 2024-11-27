@@ -77,12 +77,16 @@ class CircuitAviary(BaseNewRLAviary):
         reward = 0.0
         state = self._getDroneStateVector(0)
         pos = np.array([state[0], state[1]])
-        
         # Calculate current position relative to circle center
         current_radius = np.sqrt(pos[0]**2 + pos[1]**2)
         current_angle = np.arctan2(pos[1], pos[0])
         if current_angle < 0:
             current_angle += 2 * np.pi
+
+        # Reward for staying close to ideal circular path
+        if abs(current_radius - self.CIRCUIT_RADIUS) < 0.5:
+            reward += 1.0
+
             
         # Reward for staying close to ideal circular path
         if abs(current_radius - self.CIRCUIT_RADIUS) < 0.5:
@@ -94,7 +98,7 @@ class CircuitAviary(BaseNewRLAviary):
         velocity_alignment = np.dot(velocity, expected_velocity)
         if velocity_alignment > 0:
             reward += 1.0 * velocity_alignment
-        
+
         # Main reward for passing through gates
         for i, gate_pos in enumerate(self.gates_positions):
             gate_pos = np.array(gate_pos)
@@ -104,6 +108,15 @@ class CircuitAviary(BaseNewRLAviary):
                 if i not in self.gates_passed:
                     self.gates_passed.add(i)
                     reward += 10
+        # Height maintenance reward
+        if abs(state[2] - 0.5) < 0.3:
+            reward += 1.0
+
+        # Bonus for completing the circuit
+        if self._computeTruncated():
+            reward += 100
+
+        return reward
         
         # Height maintenance reward
         if abs(state[2] - 0.5) < 0.3:
