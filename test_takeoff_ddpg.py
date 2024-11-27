@@ -28,10 +28,10 @@ MEMORY_SIZE = 100000
 BATCH_SIZE = 64
 
 
-# CHECKPOINT_PATH = "log_dir/takeoff_ddpg/6392_checkpoint_takeoff_ddpg.pth"
+CHECKPOINT_PATH = "log_dir/takeoff_ddpg/13110_checkpoint_takeoff_ddpg.pth"
 
 
-CHECKPOINT_PATH = "log_dir/takeoff_ddpg/best_takeoff_ddpg.pth"
+# CHECKPOINT_PATH = "log_dir/takeoff_ddpg/best_takeoff_ddpg.pth"
 
 
 # Test environment configuration
