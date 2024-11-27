@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 from torch.distributions import MultivariateNormal
 
+# import torch_directml
+
 ######## Implementation for OU Noise based from https://soeren-kirchner.medium.com/deep-deterministic-policy-gradient-ddpg-with-and-without-ornstein-uhlenbeck-process-e6d272adfc3
 class OUNoise(object):
     """Ornstein-Uhlenbeck process."""
@@ -217,6 +219,7 @@ class ActorNetwork(nn.Module):
     def forward(self, state):
         # First Layer
         x = self.hiddenlayer1(state)
+        # print(f"Before LayerNorm: {x.shape}, {x}")
         x = self.bn1(x)
         x = self.relu(x)
 
@@ -239,10 +242,17 @@ class DDPG:
         self.action_size = action_size
         self.memory_size = memory_size
         self.batch_size = batch_size
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # self.device = torch.device("cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # if torch.cuda.is_available():
+        #     self.device = torch.device("cuda")  # Use CUDA if available
+        # elif torch_directml.is_available():
+        # self.device = torch_directml.device(torch_directml.default_device())  # Use DirectML if available
+        # else:
+            # self.device = torch.device("cpu")  # Fallback to CPU
+
 
         self.experience_replay_buffer = MemoryReplayBuffer(memory_size, state_dim, action_size)
 
