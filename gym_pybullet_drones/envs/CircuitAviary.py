@@ -77,6 +77,7 @@ class CircuitAviary(BaseNewRLAviary):
         reward = 0.0
         state = self._getDroneStateVector(0)
         pos = np.array([state[0], state[1]])
+        height = state[2]
         
         # Calculate current position relative to circle center
         current_radius = np.sqrt(pos[0]**2 + pos[1]**2)
@@ -85,30 +86,33 @@ class CircuitAviary(BaseNewRLAviary):
             current_angle += 2 * np.pi
             
         # Reward for staying close to ideal circular path
-        if abs(current_radius - self.CIRCUIT_RADIUS) < 0.5:
-            reward += 1.0
-            
+        path_deviation = abs(current_radius - self.CIRCUIT_RADIUS)
+        reward += max(0, 1.0 - path_deviation)  # Ensure reward is non-negative
+        
         # Reward for moving in circular direction
         velocity = np.array([state[10], state[11]])
         expected_velocity = np.array([-np.sin(current_angle), np.cos(current_angle)])
         velocity_alignment = np.dot(velocity, expected_velocity)
-        if velocity_alignment > 0:
-            reward += 1.0 * velocity_alignment
+        reward += max(0, velocity_alignment)  # Ensure reward is non-negative
         
         # Main reward for passing through gates
         for i, gate_pos in enumerate(self.gates_positions):
             gate_pos = np.array(gate_pos)
             dist_to_gate = np.linalg.norm(pos - gate_pos)
             
-            if dist_to_gate < 0.3 and state[2] <= 0.5:  # Within gate bounds and correct height
+            if dist_to_gate < 0.3 and 0.4 <= height <= 0.6:  # Within gate bounds and correct height
                 if i not in self.gates_passed:
                     self.gates_passed.add(i)
                     reward += 10
         
         # Height maintenance reward
-        if abs(state[2] - 0.5) < 0.3:
-            reward += 1.0
-            
+        if height < 0.4:
+            reward -= 1  # Penalize for being too low
+        elif height > 0.6:
+            reward -= 1  # Penalize for being too high
+        else:
+            reward += 1  # Reward for maintaining correct height
+        
         # Bonus for completing the circuit
         if self._computeTruncated():
             reward += 100
