@@ -134,10 +134,10 @@ class FlyThruGoalGateAviary(BaseNewRLAviary):
         """Computes the current truncated value."""
         state = self._getDroneStateVector(0)
 
-        # if abs(state[0]) > 2.0 or abs(state[1]) > 3.0 or state[2] > 1.2: 
-        #     return True
-        # if abs(state[7]) > 0.5 or abs(state[8]) > 0.5:
-        #     return True
+        if abs(state[0]) > 2.0 or abs(state[1]) > 3.0 or state[2] > 1.2: 
+            return True
+        if abs(state[7]) > 0.5 or abs(state[8]) > 0.5:
+            return True
 
         if self.step_counter / self.PYB_FREQ > self.EPISODE_LEN_SEC:
             return True
