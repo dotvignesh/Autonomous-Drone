@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 import numpy as np
 from CustomRL.ddpg import DDPG
-from gym_pybullet_drones.envs.HoverAviary import HoverAviary
+from gym_pybullet_drones.envs.FlyThruGoalGateAviary import FlyThruGoalGateAviary
 from gym_pybullet_drones.utils.utils import sync
 from gym_pybullet_drones.utils.enums import ObservationType, ActionType
 
@@ -27,17 +27,17 @@ HIDDEN_DIM2 = 512
 MEMORY_SIZE = 100000
 BATCH_SIZE = 64
 
+CHECKPOINT_PATH = "log_dir/FlyThruGoalGateAviary_ddpg/best_FlyThruGoalGateAviary_ddpg.pth"
 
-CHECKPOINT_PATH = "log_dir/hover_ddpg/best_hover_ddpg.pth"
 
 # Test environment configuration
 TEST_EPISODE_EXTRA_TIME = 20  # Extra seconds added to EPISODE_LEN_SEC for testing
 
 def setup_environment(output_folder):
-    """Create the Hover Aviary environment and ensure output folder exists."""
+    """Create the FlyThruGoalGate Aviary environment and ensure output folder exists."""
     output_dir = os.path.join(output_folder, f'recording_{datetime.now().strftime("%m.%d.%Y_%H.%M.%S")}')
     os.makedirs(output_dir, exist_ok=True)
-    return HoverAviary(gui=DEFAULT_GUI, obs=DEFAULT_OBS, act=DEFAULT_ACT, record=DEFAULT_RECORD_VIDEO)
+    return FlyThruGoalGateAviary(gui=DEFAULT_GUI, obs=DEFAULT_OBS, act=DEFAULT_ACT, record=DEFAULT_RECORD_VIDEO)
 
 def load_agent(checkpoint_path):
     """Initialize and load a DDPG agent from the given checkpoint path."""
