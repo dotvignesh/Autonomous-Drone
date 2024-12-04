@@ -36,7 +36,6 @@ Located under the `gym_pybullet_drones/envs` directory:
   - `learn_thru_goal_gate.py`: Trains a PPO model to navigate through a specific goal gate.
 
 - **Stable Baselines 3 (SB3):**
-  - `learn_circuit_stable_baseline.py`: SB3 PPO implementation for circular circuit navigation.
   - `learn_gate_stable_baseline.py`: SB3 PPO implementation for gate passing.
   - `learn_goal_gate_sb3.py`: SB3 PPO implementation for goal-directed gate navigation.
   - `learn_hover_stable_baseline.py`: SB3 PPO implementation for hovering.
@@ -46,8 +45,8 @@ Located under the `gym_pybullet_drones/envs` directory:
 - **Custom Implementation:**
   - `learn_circuit_ddpg.py`: Trains a DDPG model for circuit navigation.
   - `learn_FlyThruGate_ddpg.py`: Trains a DDPG model for navigating through gates with obstacles.
+  - `learn_FlyThruGoalGateAviary_ddpg.py`: Trains a DDPG model for goal-directed gate navigation.
   - `learn_hover_ddpg.py`: Trains a DDPG model for stable hovering.
-  - `test_circuit_ddpg.py`: Validates the trained DDPG model for circuit navigation.
 
 ---
 
@@ -68,9 +67,10 @@ Located under the `gym_pybullet_drones/envs` directory:
 
 #### DDPG
 
-- `learn_FlyThruGoalGateAviary_ddpg.py`: A specialized DDPG training file for goal-directed gate navigation.
+- `test_FlyThruGoalGateAviary_ddpg.py`: Tests DDPG-trained models for goal-directed gate navigation.
 - `test_FlyThruGate_ddpg.py`: Tests DDPG-trained models for navigating through gates.
 - `test_hover_ddpg.py`: Tests DDPG-trained models for stable hovering.
+- `test_circuit_ddpg.py`: Tests DDPG-trained models for for circular circuit navigation
 
 ---
 
